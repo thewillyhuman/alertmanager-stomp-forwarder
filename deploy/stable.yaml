@@ -1,0 +1,80 @@
+---
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: alertmanager-stomp-forwarder
+  namespace: default
+  labels:
+    component: alertmanager-stomp-forwarder
+spec:
+  replicas: 1
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        component: alertmanager-stomp-forwarder
+    spec:
+      restartPolicy: Always
+      containers:
+        - name: alertmanager-stomp-forwarder
+          image: alertmanager-stomp-forwarder:latest
+          imagePullPolicy: Always
+          # You can also specify arguments
+          # args: ["--addr=:9087", "--debug", "--arn-prefix=<some_prefix>"]
+          resources:
+            limits:
+              memory: 1Gi
+              cpu: 0.5
+            requests:
+              cpu: 0.2
+              memory: 0.5Gi
+          ports:
+            - containerPort: 9087
+              name: webhook-port
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: webhook-port
+            initialDelaySeconds: 30
+            timeoutSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: webhook-port
+            initialDelaySeconds: 10
+            timeoutSeconds: 10
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager-stomp-forwarder-svc
+  namespace: default
+  labels:
+    component:  alertmanager-stomp-forwarder
+spec:
+  ports:
+    - port: 9087
+      name: webhook-port
+  selector:
+    component: alertmanager-stomp-forwarder
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: alertmanager-stomp-forwarder-metrics-sm
+  namespace: default
+  labels:
+    component: alertmanager-stomp-forwarder
+spec:
+  selector:
+    component: alertmanager-stomp-forwarder
+  endpoints:
+    - port: webhook-port
+      scrapeTimeout: "30s"
+      interval: "40s"
